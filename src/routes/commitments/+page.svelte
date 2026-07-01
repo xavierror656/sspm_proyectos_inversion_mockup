@@ -10,8 +10,8 @@
   let investmentId = '';
   let message = null;
   let activeModal = '';
-  let form = { type: 'requisition', folio: '', supplier: '', amount: 500000, status: 'draft' };
-  let docForm = { name: '', type: 'PDF', status: 'Cargado' };
+  let form = { type: 'requisition', folio: '', supplier: '', amount: 500000, status: 'linked' };
+  let docForm = { name: '', fileType: 'PDF', documentType: 'other', status: 'Cargado' };
 
   $: projects = $analyzedProjects;
   $: if (!projectId && projects.length) {
@@ -66,7 +66,7 @@
     if (!target) return;
     message = projectsStore.addMockCommitment(target.id, { ...form });
     if (message.ok) {
-      form = { type: 'requisition', folio: '', supplier: '', amount: 500000, status: 'draft' };
+      form = { type: 'requisition', folio: '', supplier: '', amount: 500000, status: 'linked' };
       closeModal();
     }
   }
@@ -83,7 +83,7 @@
       user: 'Compras demo'
     });
     if (message.ok) {
-      docForm = { name: '', type: 'PDF', status: 'Cargado' };
+      docForm = { name: '', fileType: 'PDF', documentType: 'other', status: 'Cargado' };
       closeModal();
     }
   }
@@ -97,7 +97,7 @@
   function onDocumentFile(event) {
     const file = event.currentTarget.files?.[0];
     if (!file) return;
-    docForm = { ...docForm, name: file.name, type: inferTypeFromFile(file) };
+    docForm = { ...docForm, name: file.name, fileType: inferTypeFromFile(file) };
   }
 </script>
 
@@ -154,7 +154,7 @@
     {#if projectDocuments.length}
       <ul class="list">
         {#each projectDocuments as doc}
-          <li><strong>{doc.name}</strong><br><span class="small muted">{doc.type} · {doc.status} · {doc.uploadedIn || 'Proyecto adquisitivo'}{doc.procurementFolio ? ` · ${doc.procurementFolio}` : ''}</span></li>
+          <li><strong>{doc.name}</strong><br><span class="small muted">{doc.documentType || 'other'} · {doc.type} · {doc.status} · {doc.uploadedIn || 'Proyecto adquisitivo'}{doc.procurementFolio ? ` · ${doc.procurementFolio}` : ''}</span></li>
         {/each}
       </ul>
     {:else}
@@ -186,7 +186,7 @@
             <td><strong>{row.folio}</strong></td>
             <td>{row.supplier}</td>
             <td class="amount">{formatCurrency(row.amount)}</td>
-            <td><span class="badge {row.status === 'formalized' ? 'green' : row.status === 'canceled' ? 'gray' : 'yellow'}">{COMMITMENT_STATUS_LABELS[row.status]}</span></td>
+            <td><span class="badge {row.status === 'formalized' ? 'green' : ['cancelled', 'canceled'].includes(row.status) ? 'gray' : 'yellow'}">{COMMITMENT_STATUS_LABELS[row.status]}</span></td>
             <td>{formatDate(row.date)}</td>
             <td>{#if row.status !== 'formalized'}<button class="btn secondary" on:click={() => formalize(row)}>Formalizar</button>{:else}<span class="muted">Afecta cartera</span>{/if}</td>
           </tr>
@@ -206,7 +206,7 @@
     <div class="field"><label for="commitment-folio">Folio adquisitivo</label><input id="commitment-folio" class="input" bind:value={form.folio} placeholder="Ej. REQ-2026-0500" /></div>
     <div class="field"><label for="commitment-supplier">Proveedor</label><input id="commitment-supplier" class="input" bind:value={form.supplier} placeholder="Nombre del proveedor" /></div>
     <div class="field"><label for="commitment-amount">Monto</label><input id="commitment-amount" class="input" type="number" min="1" bind:value={form.amount} /></div>
-    <div class="field"><label for="commitment-status">Estado inicial</label><select id="commitment-status" class="select" bind:value={form.status}><option value="draft">Borrador</option><option value="in_review">En revisión</option><option value="formalized">Formalizado</option></select></div>
+    <div class="field"><label for="commitment-status">Estado inicial</label><select id="commitment-status" class="select" bind:value={form.status}><option value="linked">Vinculado</option><option value="formalized">Formalizado</option><option value="modified">Modificado</option><option value="cancelled">Cancelado</option></select></div>
   </div>
   <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" on:click={addCommitment}>Vincular ID y guardar</button><button class="btn secondary" on:click={applyInvestmentId}>Validar ID</button></div>
 </Modal>
@@ -216,7 +216,8 @@
   <div class="grid three">
     <div class="field"><label for="doc-file">Archivo</label><input id="doc-file" class="input" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" on:change={onDocumentFile} /></div>
     <div class="field"><label for="doc-name">Nombre documento</label><input id="doc-name" class="input" bind:value={docForm.name} placeholder="Ej. Oficio de adjudicación" /></div>
-    <div class="field"><label for="doc-type">Tipo</label><select id="doc-type" class="select" bind:value={docForm.type}><option>PDF</option><option>DOCX</option><option>XLSX</option><option>PNG</option><option>JPG</option></select></div>
+    <div class="field"><label for="doc-document-type">Tipo documental</label><select id="doc-document-type" class="select" bind:value={docForm.documentType}><option value="official_letter">Oficio</option><option value="agreement">Acuerdo</option><option value="contract">Contrato</option><option value="requisition">Requisición</option><option value="purchase_order">Pedido</option><option value="closure_evidence">Evidencia cierre</option><option value="other">Otro</option></select></div>
+    <div class="field"><label for="doc-type">Formato archivo</label><select id="doc-type" class="select" bind:value={docForm.fileType}><option>PDF</option><option>DOCX</option><option>XLSX</option><option>PNG</option><option>JPG</option></select></div>
     <div class="field"><label for="doc-status">Estado</label><select id="doc-status" class="select" bind:value={docForm.status}><option>Cargado</option><option>Validado</option><option>Pendiente de validación</option></select></div>
   </div>
   <div style="margin-top:12px"><button class="btn" on:click={addProcurementDocument}>Registrar documento</button></div>

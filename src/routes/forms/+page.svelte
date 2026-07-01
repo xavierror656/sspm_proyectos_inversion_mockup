@@ -13,11 +13,15 @@
   let projectForm = {
     name: '',
     fiscalYear: 2026,
-    status: 'authorized',
+    status: 'fiscal_year_authorized',
     area: 'Operación Policial',
     manager: '',
     location: '',
+    description: '',
     objective: '',
+    budgetLine: '',
+    subAccount: '',
+    notes: '',
     initialAuthorizedAmount: 1000000,
     isMultiYear: false,
     startDate: '2026-06-29',
@@ -56,11 +60,15 @@ Mejora de red de comandancias,2750000,2026,Tecnologías SSPM,Dir. Tecnologías,C
       municipalFolio: project.municipalFolio || '',
       name: project.name || '',
       fiscalYear: project.fiscalYear || 2026,
-      status: project.status || 'authorized',
+      status: project.status || 'fiscal_year_authorized',
       area: project.area || '',
       manager: project.manager || '',
       location: project.location || '',
+      description: project.description || '',
       objective: project.objective || '',
+      budgetLine: project.budgetLine || '',
+      subAccount: project.subAccount || '',
+      notes: project.notes || '',
       initialAuthorizedAmount: project.initialAuthorizedAmount || 0,
       isMultiYear: Boolean(project.isMultiYear),
       startDate: project.startDate || '2026-06-29',
@@ -78,7 +86,11 @@ Mejora de red de comandancias,2750000,2026,Tecnologías SSPM,Dir. Tecnologías,C
         name: '',
         manager: '',
         location: '',
+        description: '',
         objective: '',
+        budgetLine: '',
+        subAccount: '',
+        notes: '',
         initialAuthorizedAmount: 1000000
       };
     }
@@ -320,9 +332,13 @@ Mejora de red de comandancias,2750000,2026,Tecnologías SSPM,Dir. Tecnologías,C
     <div class="field"><label for="project-status">Estado</label><select id="project-status" class="select" bind:value={projectForm.status}>{#each Object.entries(STATUS_LABELS) as [key, label]}<option value={key}>{label}</option>{/each}</select></div>
     <div class="field"><label for="project-area">Área</label><input id="project-area" class="input" bind:value={projectForm.area} /></div>
     <div class="field"><label for="project-manager">Responsable</label><input id="project-manager" class="input" bind:value={projectForm.manager} /></div>
-    <div class="field"><label for="project-location">Ubicación</label><input id="project-location" class="input" bind:value={projectForm.location} /></div>
+    <div class="field"><label for="project-location">Ubicación demo</label><input id="project-location" class="input" bind:value={projectForm.location} /></div>
+    <div class="field"><label for="project-budget-line">Partida presupuestal</label><input id="project-budget-line" class="input" bind:value={projectForm.budgetLine} placeholder="Ej. 54101" /></div>
+    <div class="field"><label for="project-sub-account">Subcuenta</label><input id="project-sub-account" class="input" bind:value={projectForm.subAccount} placeholder="Ej. EQ-TACTICO" /></div>
     <div class="field"><label for="project-end">Fecha término</label><input id="project-end" class="input" type="date" bind:value={projectForm.endDate} /></div>
+    <div class="field" style="min-width:100%"><label for="project-description">Descripción</label><textarea id="project-description" class="textarea" bind:value={projectForm.description}></textarea></div>
     <div class="field" style="min-width:100%"><label for="project-objective">Objetivo</label><textarea id="project-objective" class="textarea" bind:value={projectForm.objective}></textarea></div>
+    <div class="field" style="min-width:100%"><label for="project-notes">Notas</label><textarea id="project-notes" class="textarea" bind:value={projectForm.notes}></textarea></div>
     <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" bind:checked={projectForm.isMultiYear} /> Proyecto plurianual</label>
   </div>
   <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" on:click={createProject}>Crear proyecto local</button><button class="btn secondary" on:click={closeModal}>Cancelar</button></div>
@@ -367,9 +383,13 @@ Mejora de red de comandancias,2750000,2026,Tecnologías SSPM,Dir. Tecnologías,C
       <div class="field"><label for="edit-status">Estado</label><select id="edit-status" class="select" bind:value={editForm.status}>{#each Object.entries(STATUS_LABELS) as [key, label]}<option value={key}>{label}</option>{/each}</select></div>
       <div class="field"><label for="edit-area">Área</label><input id="edit-area" class="input" bind:value={editForm.area} /></div>
       <div class="field"><label for="edit-manager">Responsable</label><input id="edit-manager" class="input" bind:value={editForm.manager} /></div>
-      <div class="field"><label for="edit-location">Ubicación</label><input id="edit-location" class="input" bind:value={editForm.location} /></div>
+      <div class="field"><label for="edit-location">Ubicación demo</label><input id="edit-location" class="input" bind:value={editForm.location} /></div>
+      <div class="field"><label for="edit-budget-line">Partida presupuestal</label><input id="edit-budget-line" class="input" bind:value={editForm.budgetLine} /></div>
+      <div class="field"><label for="edit-sub-account">Subcuenta</label><input id="edit-sub-account" class="input" bind:value={editForm.subAccount} /></div>
       <div class="field"><label for="edit-end">Fecha término</label><input id="edit-end" class="input" type="date" bind:value={editForm.endDate} /></div>
+      <div class="field" style="min-width:100%"><label for="edit-description">Descripción</label><textarea id="edit-description" class="textarea" bind:value={editForm.description}></textarea></div>
       <div class="field" style="min-width:100%"><label for="edit-objective">Objetivo</label><textarea id="edit-objective" class="textarea" bind:value={editForm.objective}></textarea></div>
+      <div class="field" style="min-width:100%"><label for="edit-notes">Notas</label><textarea id="edit-notes" class="textarea" bind:value={editForm.notes}></textarea></div>
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" bind:checked={editForm.isMultiYear} /> Proyecto plurianual</label>
     </div>
     <div class="notice" style="margin-top:12px">Regla: no se puede editar <code>currentAmount</code>. El monto vigente se recalcula como monto inicial + movimientos.</div>

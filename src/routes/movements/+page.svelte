@@ -14,7 +14,7 @@
   $: projects = $analyzedProjects;
   $: if (!projectId && projects.length) projectId = projects[0].id;
   $: project = projects.find((item) => item.id === projectId);
-  $: signedAmount = movementType === 'decrease' || movementType === 'transfer_out' ? -Math.abs(Number(amount || 0)) : Math.abs(Number(amount || 0));
+  $: signedAmount = movementType === 'decrease' || movementType === 'redistribution_out' ? -Math.abs(Number(amount || 0)) : Math.abs(Number(amount || 0));
 
   function submit() {
     message = projectsStore.addMovement(projectId, { type: movementType, amount: signedAmount, concept });

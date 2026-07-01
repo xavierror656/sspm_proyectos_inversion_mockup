@@ -1,0 +1,762 @@
+// DBML compatible con https://dbdiagram.io
+// Submódulo: Cartera, Seguimiento y Análisis de Proyectos de Inversión SSPM
+// Actualizado al flujo validado:
+// - En Cartera no se suben documentos.
+// - La carga documental vive en Proyecto Adquisitivo / Compras.
+// - Al capturar el ID del proyecto de inversión en Proyecto Adquisitivo, cartera queda committed.
+// - Al formalizar la referencia adquisitiva, cartera queda formalized y se actualiza committed_amount.
+// Convención:
+// - Tables, fields, enums and relationships in English.
+// - Notes in Spanish.
+// - References prefixed with external_ represent existing platform modules.
+// - Own module tables do not use external_ prefix.
+// - Objects prefixed with vw_ represent SQL views or materialized views for analysis.
+
+Project SSPM_Investment_Portfolio_With_Analysis {
+  database_type: "PostgreSQL"
+  Note: "Modelo conceptual actualizado para Cartera, Seguimiento y Análisis de Proyectos de Inversión SSPM. Cartera no almacena carga documental directa; los documentos se cargan en Proyecto Adquisitivo y se consultan desde cartera por vínculo al ID del proyecto de inversión."
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+Enum investment_project_status {
+  initial_registration
+  incorporated_authorized
+  fiscal_year_authorized
+  in_procurement_process
+  committed
+  formalized
+  pending_remaining_balance
+  closed
+  cancelled
+}
+
+Enum project_movement_type {
+  increase
+  decrease
+  redistribution_out
+  redistribution_in
+  name_change
+  objective_change
+  remaining_balance_cancellation
+  closure
+}
+
+Enum procurement_reference_type {
+  requisition
+  contract
+  purchase_order
+}
+
+Enum financial_commitment_status {
+  linked
+  formalized
+  modified
+  cancelled
+}
+
+Enum project_authorization_type {
+  creation
+  redistribution
+  cancellation
+  closure
+}
+
+Enum project_authorization_status {
+  pending
+  approved
+  rejected
+}
+
+Enum project_alert_type {
+  missing_fiscal_year_authorization
+  missing_procurement_link
+  procurement_linked_not_formalized
+  pending_remaining_balance
+  closure_candidate
+  multi_year_expiring_soon
+  multiple_procurements
+  procurement_exceeds_project_amount
+}
+
+Enum project_alert_status {
+  active
+  handled
+  dismissed
+}
+
+Enum project_alert_severity {
+  low
+  medium
+  high
+  critical
+}
+
+Enum project_document_type {
+  official_letter
+  agreement
+  contract
+  requisition
+  purchase_order
+  closure_evidence
+  other
+}
+
+Enum procurement_document_status {
+  uploaded
+  validated
+  pending_validation
+  rejected
+}
+
+Enum project_health_status {
+  green
+  yellow
+  red
+  blue
+  gray
+}
+
+Enum project_analysis_category {
+  without_procurement
+  procurement_id_linked
+  formalized
+  closure_candidate
+  pending_remaining_balance
+  closed
+  cancelled
+}
+
+Enum kpi_period_type {
+  daily
+  weekly
+  monthly
+  quarterly
+  yearly
+}
+
+// =====================================================
+// EXTERNAL / EXISTING PLATFORM REFERENCES
+// =====================================================
+
+Table external_system_users {
+  id bigint [pk]
+  person_id bigint [note: "Referencia a RH / ID_Persona cuando aplique."]
+  name varchar(150)
+  email varchar(180)
+  is_active boolean [default: true]
+  created_at timestamp
+  updated_at timestamp
+
+  Note: "Referencia a la tabla real de usuarios/auth de Laravel. No crear si ya existe. Se usa para trazabilidad de capturas, autorizaciones, movimientos y auditoría."
+}
+
+Table external_hr_people {
+  person_id bigint [pk]
+  full_name varchar(250)
+  job_title varchar(150)
+  area varchar(150)
+  is_active boolean [default: true]
+
+  Note: "Referencia al Módulo de Recursos Humanos. Puede ser tabla, vista SQL, vista sincronizada desde MongoDB o endpoint interno. No es propiedad del submódulo."
+}
+
+Table external_purchase_requisitions {
+  id bigint [pk]
+  folio varchar(100)
+  status varchar(80)
+  total_amount decimal(14,2)
+  is_investment_project boolean [default: false]
+  investment_project_id bigint [note: "ID del proyecto de inversión capturado en Proyecto Adquisitivo. Cuando se llena, cartera pasa a committed."]
+  created_at timestamp
+  updated_at timestamp
+
+  Note: "Referencia al Submódulo de Requisiciones. No crear si ya existe. Permite vincular requisiciones con proyectos de inversión."
+}
+
+Table external_contracts {
+  id bigint [pk]
+  folio varchar(100)
+  status varchar(80)
+  total_amount decimal(14,2)
+  is_investment_project boolean [default: false]
+  investment_project_id bigint [note: "ID del proyecto de inversión capturado en Proyecto Adquisitivo. Cuando se llena, cartera pasa a committed."]
+  signed_at date
+  created_at timestamp
+  updated_at timestamp
+
+  Note: "Referencia al Submódulo de Contratos. No crear si ya existe. Cuando el contrato se firma/formaliza, genera o actualiza compromiso financiero."
+}
+
+Table external_purchase_orders {
+  id bigint [pk]
+  folio varchar(100)
+  status varchar(80)
+  total_amount decimal(14,2)
+  is_investment_project boolean [default: false]
+  investment_project_id bigint [note: "ID del proyecto de inversión capturado en Proyecto Adquisitivo. Cuando se llena, cartera pasa a committed."]
+  formalized_at date
+  created_at timestamp
+  updated_at timestamp
+
+  Note: "Referencia a órdenes de pedido o pedidos formalizados. No crear si ya existe. Alimenta el compromiso del proyecto al formalizarse."
+}
+
+Table external_document_storage {
+  id bigint [pk]
+  file_name varchar(250)
+  storage_path varchar(500)
+  mime_type varchar(120)
+  size_bytes bigint
+  uploaded_by_user_id bigint
+  created_at timestamp
+
+  Note: "Referencia al sistema documental/storage existente. Los documentos de proyectos de inversión se cargan desde Proyecto Adquisitivo, no desde Cartera."
+}
+
+Table external_audit_log {
+  id bigint [pk]
+  module varchar(100)
+  affected_table varchar(120)
+  record_id varchar(80)
+  action varchar(50)
+  user_id bigint
+  previous_payload jsonb
+  new_payload jsonb
+  ip_address varchar(80)
+  user_agent text
+  created_at timestamp
+
+  Note: "Referencia a bitácora global existente. Debe garantizar usuario, fecha, acción, campo o payload anterior y nuevo para cumplir trazabilidad fiscal."
+}
+
+Table external_report_exports {
+  id bigint [pk]
+  module varchar(100)
+  report_type varchar(100)
+  format varchar(20)
+  parameters jsonb
+  storage_path varchar(500)
+  generated_by_user_id bigint
+  generated_at timestamp
+
+  Note: "Referencia al motor o registro de reportes existente. Puede usarse para Excel, PDF e impresión directa."
+}
+
+Table external_dashboard_widgets {
+  id bigint [pk]
+  module varchar(100)
+  widget_name varchar(150)
+  source_name varchar(150)
+  source_type varchar(50) [note: "view, materialized_view, service, query."]
+  configuration jsonb
+  is_active boolean [default: true]
+  created_by_user_id bigint
+  created_at timestamp
+  updated_at timestamp
+
+  Note: "Referencia al Dashboard Ejecutivo existente. No crear si ya existe. Consume KPIs, semáforos, alertas y vistas de análisis del módulo."
+}
+
+// =====================================================
+// OWN MODULE TABLES: FINANCIAL CORE
+// =====================================================
+
+Table investment_projects {
+  id bigserial [pk]
+  internal_folio varchar(30) [not null, unique, note: "Formato CART-0001-2026. Automático e inmutable."]
+  municipal_folio varchar(80) [note: "Opcional. Captura manual si Municipio asigna folio."]
+  name varchar(250) [not null]
+  description text
+  objective text
+  requesting_area varchar(180)
+  fiscal_year int [not null]
+  status investment_project_status [not null, default: "initial_registration"]
+
+  initial_authorized_amount decimal(14,2) [not null, default: 0]
+  current_amount decimal(14,2) [not null, default: 0, note: "No se edita manualmente. Se recalcula por movimientos."]
+  committed_amount decimal(14,2) [not null, default: 0, note: "Suma de financial_commitments formalizados desde Proyecto Adquisitivo."]
+  remaining_balance decimal(14,2) [not null, default: 0, note: "current_amount - committed_amount."]
+
+  is_multi_year boolean [not null, default: false]
+  start_date date
+  end_date date
+  budget_line varchar(80)
+  sub_account varchar(80)
+  notes text
+  closed_at timestamp
+
+  created_by_user_id bigint [not null]
+  updated_by_user_id bigint
+  created_by_person_id bigint [note: "Duplicado controlado para trazabilidad con RH si la arquitectura lo requiere."]
+  updated_by_person_id bigint
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    internal_folio [unique]
+    fiscal_year
+    status
+    is_multi_year
+    created_by_user_id
+    created_by_person_id
+  }
+
+  Note: "Entidad raíz del submódulo. Controla autorización, monto vigente, compromiso, remanente, estado, plurianualidad y cierre formal. No debe recibir carga documental directa desde Cartera."
+}
+
+Table project_movements {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+  movement_type project_movement_type [not null]
+  movement_at timestamp [not null, default: `now()`]
+
+  amount decimal(14,2) [not null, default: 0]
+  sign smallint [not null, default: 0, note: "1 suma, -1 resta, 0 sin afectación financiera."]
+  previous_current_amount decimal(14,2)
+  new_current_amount decimal(14,2)
+
+  responsible_user_id bigint [not null]
+  responsible_person_id bigint
+  approved_by_user_id bigint
+  approved_by_person_id bigint
+
+  redistribution_id bigint
+  notes text
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    investment_project_id
+    movement_type
+    movement_at
+    responsible_user_id
+    responsible_person_id
+    redistribution_id
+  }
+
+  Note: "Todo cambio financiero o administrativo del proyecto debe registrarse aquí. El monto vigente se actualiza mediante estos movimientos, nunca por edición directa."
+}
+
+Table project_redistributions {
+  id bigserial [pk]
+  redistribution_folio varchar(30) [not null, unique]
+  source_project_id bigint [not null]
+  target_project_id bigint [not null]
+  amount decimal(14,2) [not null]
+  redistributed_at timestamp [not null, default: `now()`]
+  reason text
+  status project_authorization_status [not null, default: "approved"]
+
+  registered_by_user_id bigint [not null]
+  registered_by_person_id bigint
+  approved_by_user_id bigint
+  approved_by_person_id bigint
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    redistribution_folio [unique]
+    source_project_id
+    target_project_id
+    status
+    registered_by_user_id
+  }
+
+  Note: "Genera doble asiento: salida en proyecto origen y entrada en proyecto destino. Debe validar que el monto no exceda el remanente del origen."
+}
+
+Table financial_commitments {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+
+  reference_type procurement_reference_type [not null, note: "requisition, contract o purchase_order."]
+  reference_id bigint [not null, note: "ID de la tabla real en Compras. Puede apuntar a requisiciones, contratos o pedidos según reference_type."]
+  reference_folio varchar(100)
+
+  linked_at timestamp [not null, default: `now()`]
+  formalized_at timestamp
+  committed_amount decimal(14,2) [not null, default: 0]
+  status financial_commitment_status [not null, default: "linked"]
+
+  linked_by_user_id bigint [not null]
+  linked_by_person_id bigint
+  notes text
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    investment_project_id
+    (reference_type, reference_id) [unique]
+    status
+    formalized_at
+    linked_by_user_id
+  }
+
+  Note: "Tabla puente flexible para no acoplar el módulo a una única tabla de Compras. Al insertar vínculo por ID, investment_projects.status pasa a committed. Cuando la referencia se formaliza, pasa a formalized y actualiza committed_amount."
+}
+
+Table procurement_documents {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+  financial_commitment_id bigint
+  document_id bigint [not null, note: "Referencia al documento real en external_document_storage."]
+  reference_type procurement_reference_type
+  reference_id bigint [note: "ID de requisición, contrato o pedido cuando aplique."]
+  document_type project_document_type [not null, default: "other"]
+  status procurement_document_status [not null, default: "uploaded"]
+  uploaded_by_user_id bigint [not null]
+  uploaded_by_person_id bigint
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    investment_project_id
+    financial_commitment_id
+    document_id
+    (reference_type, reference_id)
+    document_type
+    status
+  }
+
+  Note: "Documentos cargados desde Proyecto Adquisitivo. Cartera no crea registros aquí; solo consulta los documentos asociados al ID del proyecto de inversión. Reemplaza el uso de project_documents para carga directa desde cartera."
+}
+
+Table project_authorizations {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+  authorization_type project_authorization_type [not null]
+  status project_authorization_status [not null, default: "pending"]
+
+  requested_by_user_id bigint [not null]
+  requested_by_person_id bigint
+  approved_by_user_id bigint
+  approved_by_person_id bigint
+
+  requested_at timestamp [not null, default: `now()`]
+  responded_at timestamp
+  notes text
+
+  indexes {
+    investment_project_id
+    authorization_type
+    status
+    requested_by_user_id
+    approved_by_user_id
+  }
+
+  Note: "Controla validaciones internas para creación, redistribución, cancelación y cierre. La lógica exacta depende de permisos y flujos existentes."
+}
+
+Table project_timeline_events {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+  event_type varchar(80) [not null]
+  description text [not null]
+  reference_table varchar(80)
+  reference_id bigint
+  user_id bigint
+  person_id bigint
+  event_at timestamp [not null, default: `now()`]
+
+  indexes {
+    investment_project_id
+    event_type
+    event_at
+    user_id
+  }
+
+  Note: "Línea de tiempo funcional para consulta del usuario. No sustituye la bitácora de auditoría."
+}
+
+Table project_alerts {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+  alert_type project_alert_type [not null]
+  status project_alert_status [not null, default: "active"]
+  severity project_alert_severity [not null, default: "medium"]
+  message text [not null]
+  generated_at timestamp [not null, default: `now()`]
+  handled_at timestamp
+  handled_by_user_id bigint
+  handled_by_person_id bigint
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    investment_project_id
+    alert_type
+    status
+    severity
+    generated_at
+  }
+
+  Note: "Alertas de proyecto sin autorización de ejercicio, sin ID adquisitivo, ID vinculado sin formalizar, remanente pendiente, candidato a cierre, plurianual próximo a vencer, múltiples contrataciones o procedimiento que excede monto."
+}
+
+// =====================================================
+// OWN MODULE TABLES: ANALYSIS CONFIGURATION / SNAPSHOTS
+// =====================================================
+
+Table project_analysis_rules {
+  id bigserial [pk]
+  rule_code varchar(80) [not null, unique]
+  name varchar(150) [not null]
+  description text
+  threshold_value decimal(14,4)
+  threshold_unit varchar(30) [note: "percent, days, amount, count."]
+  health_status project_health_status
+  alert_type project_alert_type
+  is_active boolean [not null, default: true]
+  created_by_user_id bigint
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    rule_code [unique]
+    is_active
+    alert_type
+  }
+
+  Note: "Tabla opcional para parametrizar reglas de análisis sin cambiar código. Ejemplos: remanente mayor a 20%, vencimiento plurianual a 30 días, múltiples contrataciones."
+}
+
+Table project_analysis_snapshots {
+  id bigserial [pk]
+  investment_project_id bigint [not null]
+  snapshot_date date [not null]
+
+  fiscal_year int [not null]
+  status investment_project_status [not null]
+  analysis_category project_analysis_category [not null]
+  health_status project_health_status [not null]
+
+  initial_authorized_amount decimal(14,2) [not null, default: 0]
+  current_amount decimal(14,2) [not null, default: 0]
+  committed_amount decimal(14,2) [not null, default: 0]
+  remaining_balance decimal(14,2) [not null, default: 0]
+  committed_percentage decimal(8,4) [not null, default: 0]
+  remaining_percentage decimal(8,4) [not null, default: 0]
+
+  active_alerts_count int [not null, default: 0]
+  procurement_links_count int [not null, default: 0]
+  formalized_commitments_count int [not null, default: 0]
+  procurement_documents_count int [not null, default: 0]
+  movements_count int [not null, default: 0]
+  days_to_end int
+  is_closure_candidate boolean [not null, default: false]
+  has_pending_remaining_balance boolean [not null, default: false]
+
+  generated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (investment_project_id, snapshot_date) [unique]
+    snapshot_date
+    fiscal_year
+    analysis_category
+    health_status
+    is_closure_candidate
+    has_pending_remaining_balance
+  }
+
+  Note: "Snapshot opcional para guardar el resultado diario del análisis por proyecto. Sirve para dashboard histórico y evita recalcular indicadores pesados. No reemplaza las tablas transaccionales."
+}
+
+Table portfolio_kpi_snapshots {
+  id bigserial [pk]
+  period_type kpi_period_type [not null, default: "daily"]
+  period_start date [not null]
+  period_end date [not null]
+  fiscal_year int
+
+  total_projects int [not null, default: 0]
+  active_projects int [not null, default: 0]
+  closed_projects int [not null, default: 0]
+  cancelled_projects int [not null, default: 0]
+  multi_year_projects int [not null, default: 0]
+
+  total_current_amount decimal(14,2) [not null, default: 0]
+  total_committed_amount decimal(14,2) [not null, default: 0]
+  total_remaining_balance decimal(14,2) [not null, default: 0]
+  portfolio_committed_percentage decimal(8,4) [not null, default: 0]
+  portfolio_remaining_percentage decimal(8,4) [not null, default: 0]
+
+  closure_candidates_count int [not null, default: 0]
+  pending_remaining_balance_count int [not null, default: 0]
+  active_alerts_count int [not null, default: 0]
+  high_risk_projects_count int [not null, default: 0]
+
+  generated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (period_type, period_start, period_end, fiscal_year) [unique]
+    fiscal_year
+    period_start
+    period_end
+  }
+
+  Note: "Snapshot de KPIs de cartera para Dashboard Ejecutivo. Puede generarse diario por scheduler. Si el dashboard calcula en vivo, esta tabla puede omitirse."
+}
+
+// =====================================================
+// ANALYSIS VIEWS / MATERIALIZED VIEWS
+// =====================================================
+
+Table vw_project_financial_analysis {
+  investment_project_id bigint [pk]
+  internal_folio varchar(30)
+  name varchar(250)
+  fiscal_year int
+  status investment_project_status
+  analysis_category project_analysis_category
+  health_status project_health_status
+
+  current_amount decimal(14,2)
+  committed_amount decimal(14,2)
+  remaining_balance decimal(14,2)
+  committed_percentage decimal(8,4)
+  remaining_percentage decimal(8,4)
+
+  movements_count int
+  procurement_links_count int
+  formalized_commitments_count int
+  procurement_documents_count int
+  active_alerts_count int
+  last_movement_at timestamp
+  last_commitment_at timestamp
+
+  Note: "VIEW o MATERIALIZED VIEW. Vista principal de análisis financiero por proyecto. Debe calcular porcentajes, semáforo y categoría usando investment_projects, project_movements, financial_commitments, procurement_documents y project_alerts."
+}
+
+Table vw_project_closure_candidates {
+  investment_project_id bigint [pk]
+  internal_folio varchar(30)
+  name varchar(250)
+  fiscal_year int
+  current_amount decimal(14,2)
+  committed_amount decimal(14,2)
+  remaining_balance decimal(14,2)
+  remaining_percentage decimal(8,4)
+  active_alerts_count int
+  recommended_action varchar(120)
+
+  Note: "VIEW o MATERIALIZED VIEW. Lista proyectos candidatos a cierre cuando tienen compromiso formalizado y remanente bajo, por ejemplo menor a 20%, según regla configurable."
+}
+
+Table vw_project_pending_balances {
+  investment_project_id bigint [pk]
+  internal_folio varchar(30)
+  name varchar(250)
+  fiscal_year int
+  current_amount decimal(14,2)
+  committed_amount decimal(14,2)
+  remaining_balance decimal(14,2)
+  remaining_percentage decimal(8,4)
+  suggested_destination varchar(120)
+
+  Note: "VIEW o MATERIALIZED VIEW. Lista proyectos con remanente pendiente de definir. Sirve para redistribución, reducción, cancelación o retención."
+}
+
+Table vw_project_procurement_analysis {
+  investment_project_id bigint [pk]
+  internal_folio varchar(30)
+  name varchar(250)
+  fiscal_year int
+  requisitions_count int
+  contracts_count int
+  purchase_orders_count int
+  procurement_links_count int
+  formalized_commitments_count int
+  procurement_documents_count int
+  total_procurement_amount decimal(14,2)
+  total_formalized_amount decimal(14,2)
+  has_multiple_procurements boolean
+  has_link_without_formalization boolean
+  exceeds_current_amount boolean
+
+  Note: "VIEW o MATERIALIZED VIEW. Analiza la relación con Proyecto Adquisitivo para detectar ID vinculado sin formalizar, múltiples contrataciones, documentos asociados, excedentes contra monto vigente y compromisos formalizados."
+}
+
+Table vw_portfolio_kpis {
+  fiscal_year int [pk]
+  total_projects int
+  active_projects int
+  closed_projects int
+  multi_year_projects int
+  total_current_amount decimal(14,2)
+  total_committed_amount decimal(14,2)
+  total_remaining_balance decimal(14,2)
+  portfolio_committed_percentage decimal(8,4)
+  portfolio_remaining_percentage decimal(8,4)
+  closure_candidates_count int
+  pending_remaining_balance_count int
+  active_alerts_count int
+
+  Note: "VIEW o MATERIALIZED VIEW. KPIs agregados para Dashboard Ejecutivo y reportes de presupuesto."
+}
+
+// =====================================================
+// RELATIONSHIPS
+// =====================================================
+
+Ref: external_system_users.person_id > external_hr_people.person_id
+
+Ref: investment_projects.created_by_user_id > external_system_users.id
+Ref: investment_projects.updated_by_user_id > external_system_users.id
+Ref: investment_projects.created_by_person_id > external_hr_people.person_id
+Ref: investment_projects.updated_by_person_id > external_hr_people.person_id
+
+Ref: project_movements.investment_project_id > investment_projects.id
+Ref: project_movements.responsible_user_id > external_system_users.id
+Ref: project_movements.responsible_person_id > external_hr_people.person_id
+Ref: project_movements.approved_by_user_id > external_system_users.id
+Ref: project_movements.approved_by_person_id > external_hr_people.person_id
+Ref: project_movements.redistribution_id > project_redistributions.id
+
+Ref: project_redistributions.source_project_id > investment_projects.id
+Ref: project_redistributions.target_project_id > investment_projects.id
+Ref: project_redistributions.registered_by_user_id > external_system_users.id
+Ref: project_redistributions.registered_by_person_id > external_hr_people.person_id
+Ref: project_redistributions.approved_by_user_id > external_system_users.id
+Ref: project_redistributions.approved_by_person_id > external_hr_people.person_id
+
+Ref: financial_commitments.investment_project_id > investment_projects.id
+Ref: financial_commitments.linked_by_user_id > external_system_users.id
+Ref: financial_commitments.linked_by_person_id > external_hr_people.person_id
+
+Ref: external_purchase_requisitions.investment_project_id > investment_projects.id
+Ref: external_contracts.investment_project_id > investment_projects.id
+Ref: external_purchase_orders.investment_project_id > investment_projects.id
+
+Ref: procurement_documents.investment_project_id > investment_projects.id
+Ref: procurement_documents.financial_commitment_id > financial_commitments.id
+Ref: procurement_documents.document_id > external_document_storage.id
+Ref: procurement_documents.uploaded_by_user_id > external_system_users.id
+Ref: procurement_documents.uploaded_by_person_id > external_hr_people.person_id
+Ref: external_document_storage.uploaded_by_user_id > external_system_users.id
+
+Ref: project_authorizations.investment_project_id > investment_projects.id
+Ref: project_authorizations.requested_by_user_id > external_system_users.id
+Ref: project_authorizations.requested_by_person_id > external_hr_people.person_id
+Ref: project_authorizations.approved_by_user_id > external_system_users.id
+Ref: project_authorizations.approved_by_person_id > external_hr_people.person_id
+
+Ref: project_timeline_events.investment_project_id > investment_projects.id
+Ref: project_timeline_events.user_id > external_system_users.id
+Ref: project_timeline_events.person_id > external_hr_people.person_id
+
+Ref: project_alerts.investment_project_id > investment_projects.id
+Ref: project_alerts.handled_by_user_id > external_system_users.id
+Ref: project_alerts.handled_by_person_id > external_hr_people.person_id
+
+Ref: external_audit_log.user_id > external_system_users.id
+Ref: external_report_exports.generated_by_user_id > external_system_users.id
+Ref: external_dashboard_widgets.created_by_user_id > external_system_users.id
+
+Ref: project_analysis_rules.created_by_user_id > external_system_users.id
+Ref: project_analysis_snapshots.investment_project_id > investment_projects.id
+
+Ref: vw_project_financial_analysis.investment_project_id > investment_projects.id
+Ref: vw_project_closure_candidates.investment_project_id > investment_projects.id
+Ref: vw_project_pending_balances.investment_project_id > investment_projects.id
+Ref: vw_project_procurement_analysis.investment_project_id > investment_projects.id
+
+// Dashboard/reporting consumes views logically through source_name/source_type, not hard FK.

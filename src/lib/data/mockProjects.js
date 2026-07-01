@@ -58,8 +58,8 @@ export const mockProjects = [
       { id: 'mov-0002-a', date: '2026-03-20', type: 'increase', amount: 850000, concept: 'Ampliación por equipamiento táctico', user: 'Dirección Administrativa' }
     ],
     commitments: [
-      { id: 'com-0002-a', date: '2026-04-02', type: 'requisition', folio: 'REQ-2026-0221', supplier: 'Vehículos Especiales Frontera', amount: 9300000, status: 'in_review' },
-      { id: 'com-0002-b', date: '2026-05-14', type: 'purchase_order', folio: 'PED-2026-0090', supplier: 'Equipamiento Policial MX', amount: 1400000, status: 'draft' }
+      { id: 'com-0002-a', date: '2026-04-02', type: 'requisition', folio: 'REQ-2026-0221', supplier: 'Vehículos Especiales Frontera', amount: 9300000, status: 'linked' },
+      { id: 'com-0002-b', date: '2026-05-14', type: 'purchase_order', folio: 'PED-2026-0090', supplier: 'Equipamiento Policial MX', amount: 1400000, status: 'linked' }
     ],
     documents: [
       { id: 'doc-0002-a', name: 'Justificación operativa de patrullas', type: 'DOCX', status: 'Cargado' },
@@ -124,7 +124,7 @@ export const mockProjects = [
     municipalFolio: 'MUN-SSPM-026-004',
     name: 'Rehabilitación de casetas de vigilancia',
     fiscalYear: 2026,
-    status: 'authorized',
+    status: 'fiscal_year_authorized',
     area: 'Infraestructura',
     manager: 'Servicios Generales',
     location: 'Colonias Oriente',
@@ -195,7 +195,7 @@ export const mockProjects = [
     municipalFolio: 'MUN-SSPM-026-006',
     name: 'Modernización de centro de capacitación policial',
     fiscalYear: 2026,
-    status: 'redistributing',
+    status: 'pending_remaining_balance',
     area: 'Academia SSPM',
     manager: 'Coordinación de Formación',
     location: 'Academia Municipal',
@@ -209,7 +209,7 @@ export const mockProjects = [
     ],
     commitments: [
       { id: 'com-0006-a', date: '2026-05-04', type: 'requisition', folio: 'REQ-2026-0310', supplier: 'Aulas Inteligentes MX', amount: 1200000, status: 'formalized' },
-      { id: 'com-0006-b', date: '2026-06-11', type: 'contract', folio: 'CON-SSPM-2026-045', supplier: 'Simulación Táctica Integral', amount: 890000, status: 'in_review' }
+      { id: 'com-0006-b', date: '2026-06-11', type: 'contract', folio: 'CON-SSPM-2026-045', supplier: 'Simulación Táctica Integral', amount: 890000, status: 'linked' }
     ],
     documents: [
       { id: 'doc-0006-a', name: 'Programa anual de capacitación', type: 'PDF', status: 'Validado' },
@@ -272,7 +272,7 @@ export const mockProjects = [
     municipalFolio: 'MUN-SSPM-026-008',
     name: 'Construcción de arco lector vehicular',
     fiscalYear: 2026,
-    status: 'concluded',
+    status: 'closed',
     area: 'Infraestructura Tecnológica',
     manager: 'Dir. Tecnologías',
     location: 'Acceso Sur',

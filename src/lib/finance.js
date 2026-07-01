@@ -1,10 +1,18 @@
 import { daysUntil } from '$lib/formatters.js';
 
 export const STATUS_LABELS = {
-  authorized: 'Autorizado',
-  procurement: 'En procedimiento',
+  initial_registration: 'Registro inicial',
+  incorporated_authorized: 'Incorporado/autorizado',
+  fiscal_year_authorized: 'Autorizado ejercicio',
+  in_procurement_process: 'En proceso adquisitivo',
   committed: 'ID vinculado',
   formalized: 'Formalizado',
+  pending_remaining_balance: 'Remanente pendiente',
+  closed: 'Cerrado',
+  cancelled: 'Cancelado',
+  // Alias legacy del mock para compatibilidad con datos locales previos.
+  authorized: 'Autorizado',
+  procurement: 'En procedimiento',
   redistributing: 'Redistribución',
   concluded: 'Concluido',
   canceled: 'Cancelado'
@@ -13,6 +21,8 @@ export const STATUS_LABELS = {
 export const MOVEMENT_LABELS = {
   increase: 'Ampliación',
   decrease: 'Reducción',
+  redistribution_in: 'Redistribución recibida',
+  redistribution_out: 'Redistribución enviada',
   transfer_in: 'Redistribución recibida',
   transfer_out: 'Redistribución enviada',
   adjustment: 'Ajuste administrativo'
@@ -25,9 +35,13 @@ export const COMMITMENT_LABELS = {
 };
 
 export const COMMITMENT_STATUS_LABELS = {
+  linked: 'Vinculado',
+  formalized: 'Formalizado',
+  modified: 'Modificado',
+  cancelled: 'Cancelado',
+  // Alias legacy del mock.
   draft: 'Borrador',
   in_review: 'En revisión',
-  formalized: 'Formalizado',
   canceled: 'Cancelado'
 };
 
@@ -101,7 +115,7 @@ export function calculateProject(project) {
 }
 
 export function getTrafficLight(input) {
-  if (['concluded', 'canceled'].includes(input.status)) {
+  if (['closed', 'cancelled', 'concluded', 'canceled'].includes(input.status)) {
     return { color: 'gray', label: 'Gris', reason: 'Proyecto cerrado o cancelado; consulta histórica.' };
   }
   if (input.exceedsAvailableAmount) {
@@ -127,9 +141,9 @@ export function getAnalyticTags(input) {
   if (input.procurementReferences === 0) tags.push({ key: 'no_execution', label: 'Sin ejercicio', tone: 'red' });
   if (input.procurementReferences > 0 && input.formalizedCommitments === 0) tags.push({ key: 'procurement', label: 'ID en adquisiciones', tone: 'yellow' });
   if (input.formalizedCommitments > 0) tags.push({ key: 'formalized', label: 'Formalizado', tone: 'green' });
-  if (input.remainingBalance > 0 && !['concluded', 'canceled'].includes(input.project.status)) tags.push({ key: 'remaining', label: 'Con remanente', tone: 'yellow' });
+  if (input.remainingBalance > 0 && !['closed', 'cancelled', 'concluded', 'canceled'].includes(input.project.status)) tags.push({ key: 'remaining', label: 'Con remanente', tone: 'yellow' });
   if (input.closureCandidate) tags.push({ key: 'closure', label: 'Candidato a cierre', tone: 'blue' });
-  if (input.project.isMultiYear && !['concluded', 'canceled'].includes(input.project.status)) tags.push({ key: 'multi_year', label: 'Plurianual activo', tone: 'blue' });
+  if (input.project.isMultiYear && !['closed', 'cancelled', 'concluded', 'canceled'].includes(input.project.status)) tags.push({ key: 'multi_year', label: 'Plurianual activo', tone: 'blue' });
   if (input.exceedsAvailableAmount) tags.push({ key: 'exceeds', label: 'Riesgo de exceso', tone: 'red' });
   if ((input.project.movements || []).length >= 3) tags.push({ key: 'variable', label: 'Alta variabilidad', tone: 'purple' });
   return tags;

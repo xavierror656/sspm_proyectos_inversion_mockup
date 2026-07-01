@@ -129,7 +129,7 @@ function createProjectStore() {
             municipalFolio: row.municipalFolio || row.folio_municipal || `MUN-SSPM-${String(row.fiscalYear).slice(-2)}-${folioNumber}`,
             name: row.name,
             fiscalYear: row.fiscalYear,
-            status: 'authorized',
+            status: 'fiscal_year_authorized',
             area: String(row.area || 'Sin área asignada').trim(),
             manager: String(row.manager || 'Sin responsable').trim(),
             location: String(row.location || 'Sin ubicación').trim(),
@@ -182,7 +182,7 @@ function createProjectStore() {
           municipalFolio: payload.municipalFolio?.trim() || `MUN-SSPM-${String(fiscalYear).slice(-2)}-${folioNumber}`,
           name,
           fiscalYear,
-          status: payload.status || 'authorized',
+          status: payload.status || 'fiscal_year_authorized',
           area: payload.area?.trim() || 'Sin área asignada',
           manager: payload.manager?.trim() || 'Sin responsable',
           location: payload.location?.trim() || 'Sin ubicación',
@@ -267,7 +267,7 @@ function createProjectStore() {
         municipalFolio: project.municipalFolio || '',
         name: project.name || `Proyecto importado ${index + 1}`,
         fiscalYear: Number(project.fiscalYear) || 2026,
-        status: project.status || 'authorized',
+        status: project.status || 'fiscal_year_authorized',
         area: project.area || 'Sin área asignada',
         manager: project.manager || 'Sin responsable',
         location: project.location || 'Sin ubicación',
@@ -371,7 +371,7 @@ function createProjectStore() {
             folio: payload.folio || `REQ-2026-${Math.floor(Math.random() * 900 + 100)}`,
             supplier: payload.supplier || 'Proveedor demo',
             amount,
-            status: payload.status || 'draft'
+            status: payload.status || 'linked'
           };
           const updated = appendEvent(
             { ...project, commitments: [commitment, ...(project.commitments || [])], status: commitment.status === 'formalized' ? 'formalized' : 'committed' },
@@ -402,7 +402,8 @@ function createProjectStore() {
           const document = {
             id: uid('doc'),
             name,
-            type: payload.type || 'PDF',
+            type: payload.fileType || payload.type || 'PDF',
+            documentType: payload.documentType || 'other',
             status: payload.status || 'Cargado',
             scope: payload.scope || 'procurement',
             procurementFolio: payload.procurementFolio || '',
@@ -543,9 +544,9 @@ function createProjectStore() {
       update((items) =>
         items.map((project) => {
           if (project.id === sourceId) {
-            const movement = { id: uid('mov'), date: today(), type: 'transfer_out', amount: -value, concept: `${concept} hacia ${destination.internalFolio}`, user: 'Usuario demo' };
+            const movement = { id: uid('mov'), date: today(), type: 'redistribution_out', amount: -value, concept: `${concept} hacia ${destination.internalFolio}`, user: 'Usuario demo' };
             return appendEvent(
-              { ...project, movements: [movement, ...(project.movements || [])], status: 'redistributing' },
+              { ...project, movements: [movement, ...(project.movements || [])], status: 'pending_remaining_balance' },
               {
                 type: 'redistribution',
                 title: 'Redistribución enviada',
@@ -556,7 +557,7 @@ function createProjectStore() {
             );
           }
           if (project.id === destinationId) {
-            const movement = { id: uid('mov'), date: today(), type: 'transfer_in', amount: value, concept: `${concept} desde ${source.internalFolio}`, user: 'Usuario demo' };
+            const movement = { id: uid('mov'), date: today(), type: 'redistribution_in', amount: value, concept: `${concept} desde ${source.internalFolio}`, user: 'Usuario demo' };
             return appendEvent(
               { ...project, movements: [movement, ...(project.movements || [])] },
               {

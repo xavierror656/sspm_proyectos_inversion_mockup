@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(BASE_PATH=\"/sspm_proyectos_inversion_mockup\" npm run build)",
-      "Bash(MSYS_NO_PATHCONV=1 BASE_PATH=\"/sspm_proyectos_inversion_mockup\" npm run build)"
+      "Bash(MSYS_NO_PATHCONV=1 BASE_PATH=\"/sspm_proyectos_inversion_mockup\" npm run build)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh run *)"
     ]
   }
 }
