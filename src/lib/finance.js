@@ -3,7 +3,8 @@ import { daysUntil } from '$lib/formatters.js';
 export const STATUS_LABELS = {
   authorized: 'Autorizado',
   procurement: 'En procedimiento',
-  committed: 'Comprometido',
+  committed: 'ID vinculado',
+  formalized: 'Formalizado',
   redistributing: 'Redistribución',
   concluded: 'Concluido',
   canceled: 'Cancelado'
@@ -124,8 +125,8 @@ export function getTrafficLight(input) {
 export function getAnalyticTags(input) {
   const tags = [];
   if (input.procurementReferences === 0) tags.push({ key: 'no_execution', label: 'Sin ejercicio', tone: 'red' });
-  if (input.procurementReferences > 0 && input.formalizedCommitments === 0) tags.push({ key: 'procurement', label: 'En proceso de compra', tone: 'yellow' });
-  if (input.formalizedCommitments > 0) tags.push({ key: 'committed', label: 'Comprometido', tone: 'green' });
+  if (input.procurementReferences > 0 && input.formalizedCommitments === 0) tags.push({ key: 'procurement', label: 'ID en adquisiciones', tone: 'yellow' });
+  if (input.formalizedCommitments > 0) tags.push({ key: 'formalized', label: 'Formalizado', tone: 'green' });
   if (input.remainingBalance > 0 && !['concluded', 'canceled'].includes(input.project.status)) tags.push({ key: 'remaining', label: 'Con remanente', tone: 'yellow' });
   if (input.closureCandidate) tags.push({ key: 'closure', label: 'Candidato a cierre', tone: 'blue' });
   if (input.project.isMultiYear && !['concluded', 'canceled'].includes(input.project.status)) tags.push({ key: 'multi_year', label: 'Plurianual activo', tone: 'blue' });

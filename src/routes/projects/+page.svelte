@@ -21,12 +21,44 @@
       && (traffic === 'all' || project.trafficLight === traffic)
       && (area === 'all' || project.area === area);
   });
+
+  function procurementAction(project) {
+    if (project.procurementReferences === 0) return 'Capturar ID en Proyecto adquisitivo';
+    if (project.formalizedCommitments === 0) return 'Formalizar en Proyecto adquisitivo';
+    if (project.closureCandidate) return 'Revisar cierre y remanente';
+    return 'Seguimiento financiero';
+  }
 </script>
 
 <PageHeader
   title="Investment Projects / Cartera de Proyectos"
-  subtitle="Tabla filtrable de proyectos de inversión con cálculos financieros derivados de datos mock locales."
+  subtitle="Vista usable de cartera: sin carga documental, con alta por plantilla y vínculo al Proyecto adquisitivo."
 />
+
+<section class="card flow-card" style="margin-bottom:16px">
+  <div class="split-header">
+    <div>
+      <h3>Qué debe hacer el usuario aquí</h3>
+      <p class="muted">Cartera administra proyectos de inversión. No se suben documentos en esta pantalla; solo se ven los estados que llegan desde adquisiciones.</p>
+    </div>
+    <div class="badges">
+      <a class="btn secondary" href={`${base}/forms#project`}>Alta individual</a>
+      <a class="btn secondary" href={`${base}/forms#bulk`}>Carga masiva Excel</a>
+      <a class="btn" href={`${base}/commitments`}>Proyecto adquisitivo</a>
+    </div>
+  </div>
+  <div class="workflow-steps" style="margin-top:12px">
+    <div class="workflow-step">
+      <span>1</span><strong>Crear en cartera</strong><p>Manual o plantilla Excel/CSV. Sin documentos.</p>
+    </div>
+    <div class="workflow-step active">
+      <span>2</span><strong>ID en adquisición</strong><p>Compras captura el ID de inversión y cartera queda comprometida.</p>
+    </div>
+    <div class="workflow-step">
+      <span>3</span><strong>Formalizar</strong><p>Al formalizar en adquisición, cartera pasa a formalizado.</p>
+    </div>
+  </div>
+</section>
 
 <div class="card">
   <div class="toolbar">
@@ -76,6 +108,7 @@
           <th>Comprometido</th>
           <th>Remanente</th>
           <th>Avance</th>
+          <th>Flujo adquisitivo</th>
           <th>Semáforo / badges</th>
           <th>Acciones</th>
         </tr>
@@ -90,6 +123,13 @@
             <td class="amount">{formatCurrency(project.committedAmount)}</td>
             <td class="amount">{formatCurrency(project.remainingBalance)}</td>
             <td style="min-width:140px"><strong>{formatPercent(project.executionPercentage)}</strong><ProgressBar value={project.executionPercentage} tone={project.trafficLight} /></td>
+            <td>
+              <div class="badges" style="margin-bottom:6px">
+                <span class="badge {project.procurementReferences ? 'blue' : 'gray'}">{project.procurementReferences} vinculados</span>
+                <span class="badge {project.formalizedCommitments ? 'green' : 'yellow'}">{project.formalizedCommitments} formalizados</span>
+              </div>
+              <span class="small muted">{procurementAction(project)}</span>
+            </td>
             <td>
               <div class="badges">
                 <TrafficBadge color={project.trafficLight} label={project.trafficLabel} reason={project.trafficReason} />

@@ -32,6 +32,27 @@
     <FinancialSummary {project} />
   </section>
 
+  <section class="card flow-card" style="margin-top:16px">
+    <div class="split-header">
+      <div>
+        <h3>Estado del flujo adquisitivo</h3>
+        <p class="muted">Los documentos y la formalización se administran fuera de cartera, en Proyecto adquisitivo.</p>
+      </div>
+      <a class="btn" href={`${base}/commitments`}>Abrir Proyecto adquisitivo</a>
+    </div>
+    <div class="workflow-steps" style="margin-top:12px">
+      <div class="workflow-step {project ? 'active' : ''}">
+        <span>1</span><strong>Proyecto de inversión</strong><p>{project.internalFolio} creado en cartera.</p>
+      </div>
+      <div class="workflow-step {project.procurementReferences ? 'active' : ''}">
+        <span>2</span><strong>ID capturado</strong><p>{project.procurementReferences ? `${project.procurementReferences} referencia(s) adquisitivas vinculadas.` : 'Pendiente capturar ID en adquisiciones.'}</p>
+      </div>
+      <div class="workflow-step {project.formalizedCommitments ? 'active' : ''}">
+        <span>3</span><strong>Formalización</strong><p>{project.formalizedCommitments ? `${project.formalizedCommitments} formalizada(s); impacta comprometido.` : 'Pendiente formalizar en adquisiciones.'}</p>
+      </div>
+    </div>
+  </section>
+
   <section class="grid two" style="margin-top:16px">
     <div class="card">
       <h3>Movimientos financieros</h3>
@@ -67,10 +88,13 @@
 
   <section class="grid two" style="margin-top:16px">
     <div class="card">
-      <h3>Documentos mock</h3>
+      <h3>Documentos del proyecto adquisitivo</h3>
+      <p class="notice" style="margin-bottom:12px">Consulta solamente. La carga de documentos se realiza en Proyecto adquisitivo después de vincular el ID de inversión.</p>
       <ul class="list">
         {#each project.documents as doc}
-          <li><strong>{doc.name}</strong><br><span class="small muted">{doc.type} · {doc.status}</span></li>
+          <li><strong>{doc.name}</strong><br><span class="small muted">{doc.type} · {doc.status} · {doc.uploadedIn || 'Proyecto adquisitivo'}{doc.procurementFolio ? ` · ${doc.procurementFolio}` : ''}</span></li>
+        {:else}
+          <li class="muted">Sin documentos vinculados desde Proyecto adquisitivo.</li>
         {/each}
       </ul>
     </div>

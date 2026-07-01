@@ -83,6 +83,82 @@ function createProjectStore() {
       set([]);
       return { ok: true, message: 'Base local vaciada. Cree proyectos desde el formulario.' };
     },
+    createProjectsFromTemplate(rows) {
+      if (!Array.isArray(rows) || !rows.length) {
+        return { ok: false, message: 'La plantilla no contiene filas para importar.' };
+      }
+
+      const validRows = [];
+      const errors = [];
+      rows.forEach((row, index) => {
+        const name = (row.name || row.nombre || '').trim();
+        const initialAuthorizedAmount = Number(row.initialAuthorizedAmount || row.monto_autorizado || row.monto || 0);
+        if (!name) errors.push(`Fila ${index + 1}: falta nombre.`);
+        if (!Number.isFinite(initialAuthorizedAmount) || initialAuthorizedAmount <= 0) errors.push(`Fila ${index + 1}: monto inválido.`);
+        if (name && Number.isFinite(initialAuthorizedAmount) && initialAuthorizedAmount > 0) {
+          validRows.push({
+            ...row,
+            name,
+            initialAuthorizedAmount,
+            fiscalYear: Number(row.fiscalYear || row.ejercicio || 2026) || 2026,
+            area: row.area || 'Sin área asignada',
+            manager: row.manager || row.responsable || 'Sin responsable',
+            location: row.location || row.ubicacion || 'Sin ubicación',
+            objective: row.objective || row.objetivo || 'Objetivo pendiente de captura.',
+            isMultiYear: ['true', '1', 'si', 'sí', 'yes'].includes(String(row.isMultiYear || row.plurianual || '').toLowerCase()),
+            endDate: row.endDate || row.fecha_termino || ''
+          });
+        }
+      });
+
+      if (!validRows.length) {
+        return { ok: false, message: `No se pudo importar la plantilla. ${errors.slice(0, 3).join(' ')}` };
+      }
+
+      update((projects) => {
+        const existing = projects
+          .map((project) => Number(String(project.internalFolio || '').match(/CART-(\d+)-/)?.[1] || 0))
+          .filter((value) => Number.isFinite(value));
+        let nextSeq = (existing.length ? Math.max(...existing) : 0) + 1;
+        const created = validRows.map((row) => {
+          const folioNumber = String(nextSeq++).padStart(4, '0');
+          const internalFolio = `CART-${folioNumber}-${row.fiscalYear}`;
+          const base = {
+            id: uid('project'),
+            internalFolio,
+            municipalFolio: row.municipalFolio || row.folio_municipal || `MUN-SSPM-${String(row.fiscalYear).slice(-2)}-${folioNumber}`,
+            name: row.name,
+            fiscalYear: row.fiscalYear,
+            status: 'authorized',
+            area: String(row.area || 'Sin área asignada').trim(),
+            manager: String(row.manager || 'Sin responsable').trim(),
+            location: String(row.location || 'Sin ubicación').trim(),
+            objective: String(row.objective || 'Objetivo pendiente de captura.').trim(),
+            initialAuthorizedAmount: row.initialAuthorizedAmount,
+            isMultiYear: Boolean(row.isMultiYear),
+            startDate: row.startDate || row.fecha_inicio || today(),
+            endDate: row.endDate || '',
+            movements: [],
+            commitments: [],
+            documents: [],
+            alerts: [],
+            timeline: [],
+            audit: []
+          };
+          return appendEvent(base, {
+            type: 'created',
+            title: 'Proyecto importado por plantilla',
+            description: `Alta masiva de ${internalFolio}; los documentos deberán cargarse en el proyecto adquisitivo.`,
+            action: 'project.bulk_imported',
+            user: row.user || 'Usuario demo'
+          });
+        });
+        return [...created, ...projects];
+      });
+
+      const suffix = errors.length ? ` ${errors.length} fila(s) omitida(s).` : '';
+      return { ok: true, message: `Carga masiva completada: ${validRows.length} proyecto(s) creados desde plantilla Excel/CSV.${suffix}` };
+    },
     createProject(payload) {
       const name = (payload.name || '').trim();
       const initialAuthorizedAmount = Number(payload.initialAuthorizedAmount || 0);
@@ -263,16 +339,16 @@ function createProjectStore() {
           if (!changed) return project;
           const commitment = commitments.find((item) => item.id === commitmentId);
           const updated = appendEvent(
-            { ...project, commitments, status: 'committed' },
-            {
-              type: 'commitment',
-              title: 'Compromiso formalizado',
-              description: `${commitment.folio} formalizado; ahora afecta el monto comprometido.`,
+              { ...project, commitments, status: 'formalized' },
+              {
+                type: 'commitment',
+              title: 'Proyecto adquisitivo formalizado',
+              description: `${commitment.folio} formalizado en adquisiciones; ahora afecta el monto comprometido de cartera.`,
               action: 'commitment.formalized',
               user: 'Compras demo'
             }
           );
-          result = { ok: true, message: 'Compromiso formalizado. Solo ahora afecta committedAmount.' };
+          result = { ok: true, message: 'Proyecto adquisitivo formalizado. Cartera cambia a Formalizado y ahora afecta committedAmount.' };
           return updated;
         })
       );
@@ -298,16 +374,16 @@ function createProjectStore() {
             status: payload.status || 'draft'
           };
           const updated = appendEvent(
-            { ...project, commitments: [commitment, ...(project.commitments || [])], status: 'procurement' },
+            { ...project, commitments: [commitment, ...(project.commitments || [])], status: commitment.status === 'formalized' ? 'formalized' : 'committed' },
             {
               type: 'procurement',
-              title: 'Compromiso mock agregado',
-              description: `${commitment.folio} agregado con estado ${commitment.status}; solo formalizado afecta el cálculo.`,
+              title: 'ID vinculado a proyecto adquisitivo',
+              description: `${project.internalFolio} fue capturado en el proyecto adquisitivo ${commitment.folio}; cartera queda comprometida y solo al formalizar afecta el cálculo.`,
               action: 'commitment.created',
               user: 'Compras demo'
             }
           );
-          result = { ok: true, message: 'Compromiso mock agregado.' };
+          result = { ok: true, message: 'ID vinculado en el flujo adquisitivo. Cartera queda comprometida; formalice para afectar committedAmount.' };
           return updated;
         })
       );
@@ -327,19 +403,22 @@ function createProjectStore() {
             id: uid('doc'),
             name,
             type: payload.type || 'PDF',
-            status: payload.status || 'Cargado'
+            status: payload.status || 'Cargado',
+            scope: payload.scope || 'procurement',
+            procurementFolio: payload.procurementFolio || '',
+            uploadedIn: payload.uploadedIn || 'Proyecto adquisitivo'
           };
           const updated = appendEvent(
             { ...project, documents: [document, ...(project.documents || [])] },
             {
               type: 'document',
-              title: 'Documento agregado',
-              description: `Se agregó documento ${document.name} (${document.type}) con estado ${document.status}.`,
+              title: 'Documento cargado en adquisiciones',
+              description: `Se agregó ${document.name} (${document.type}) al flujo de proyecto adquisitivo${document.procurementFolio ? ` ${document.procurementFolio}` : ''}.`,
               action: 'document.created',
               user: payload.user || 'Usuario demo'
             }
           );
-          result = { ok: true, message: 'Documento agregado a la base local.' };
+          result = { ok: true, message: 'Documento registrado en el proyecto adquisitivo; no en cartera.' };
           return updated;
         })
       );
